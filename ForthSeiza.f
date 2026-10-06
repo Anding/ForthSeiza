@@ -88,6 +88,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
             drop
         then
     repeat
+    drop
     fileid close-file abort" Cannot close Seiza WCS file"
 ;
 
