@@ -11,6 +11,23 @@ AstroImagingInForth, not through a runtime solver adapter.
 newline-delimited JSON-RPC with the child through standard input and output.
 The DLL retries exactly once after a pipe or protocol failure.
 
+## Compile-time selection
+
+Start a fresh VFXterm session, load ForthSeiza, configure it, then load the
+AstroImagingInForth integration script:
+
+```forth
+NEED ForthSeiza
+s" E:\Coding\seiza\target\release\seiza.exe" $-> seiza.executable
+s" E:\seiza-data" $-> seiza.catalog
+include scripts\AstroImagingInForth.f
+```
+
+AstroImagingInForth keeps this `solve-image` implementation and therefore
+does not load ForthASTAP. To return to ASTAP, restart VFXterm and load
+`scripts\AstroImagingInForth.f` without first loading ForthSeiza. The
+selection is compile-time; do not load both packages in one session.
+
 The public Forth implementation is:
 
 ```forth
@@ -43,11 +60,11 @@ Set the executable and local catalogue paths before the first solve:
 
 ```forth
 s" E:\Coding\seiza\target\release\seiza.exe" $-> seiza.executable
-s" E:\seiza-data\stars-deep-gaia17.bin" $-> seiza.catalog
-s" E:\seiza-data\blind-gaia16.idx" $-> seiza.index
+s" E:\seiza-data" $-> seiza.catalog
 ```
 
-`seiza.catalog` is required. `seiza.index` is optional because hinted-only
+`seiza.catalog` is required and is passed to Seiza as its `--data` directory.
+`seiza.index` is optional and left empty by default because hinted-only
 operation does not use blind solving.
 
 Build the DLL for the same architecture as VFX Forth and place
