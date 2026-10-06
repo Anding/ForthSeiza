@@ -7,9 +7,22 @@ NEED AstroCalc
 NEED ForthXISF
 
 LIBRARY: ForthSeizaBridge.dll
-Extern: int "C" SeizaBridgeStart( char * int char * int char * int ) ;
-Extern: int "C" SeizaBridgeSolve( char * int char * int char * int char * int char * int char * int char * int ) ;
+Extern: int "C" SeizaBridgeStart(
+    char * executable, int executable-length,
+    char * catalog, int catalog-length,
+    char * index, int index-length
+) ;
+Extern: int "C" SeizaBridgeSolve(
+    char * image-path, int image-path-length,
+    char * ra-deg, int ra-deg-length,
+    char * dec-deg, int dec-deg-length,
+    char * pixel-size-um, int pixel-size-um-length,
+    char * focal-length-mm, int focal-length-mm-length,
+    char * radius-deg, int radius-deg-length,
+    char * scale-tolerance, int scale-tolerance-length
+) ;
 Extern: int "C" SeizaBridgeStop() ;
+Extern: int "C" SeizaBridgeLastError( char * output, int capacity ) ;
 
 s" E:\Coding\seiza\target\release\seiza.exe" $value seiza.executable
 s" " $value seiza.catalog
