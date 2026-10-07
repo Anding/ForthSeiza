@@ -63,6 +63,18 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.string0
 ;
 
+: seiza.optional-hint { key-addr key-u map -- value-addr value-u }
+\ Pointing hints are absent when imaging without a mount. Empty RA and Dec
+\ make the hinted solver fail cleanly rather than aborting metadata lookup.
+    key-addr key-u map item? if
+        drop
+        key-addr key-u map >string
+    else
+        drop
+        0 0
+    then
+;
+
 : seiza.solve-image { img | filepath-buffer map status -- solved? }
     img FRAME_METADATA @ -> map
     img seiza.temp-FITSfilepath -> filepath-buffer
@@ -72,8 +84,8 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
         -1 exit
     then
     filepath-buffer buffer-to-string
-    s" RA" map >string
-    s" Dec" map >string
+    s" RA" map seiza.optional-hint
+    s" Dec" map seiza.optional-hint
     s" XPIXSZ" map >string
     s" FOCALLEN" map >string
     seiza.radius-deg
