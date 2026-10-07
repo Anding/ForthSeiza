@@ -25,7 +25,7 @@ Extern: int "C" SeizaBridgeStop() ;
 Extern: int "C" SeizaBridgeLastError( char * output, int capacity ) ;
 
 s" E:\Coding\seiza\target\release\seiza.exe" $value seiza.executable
-s" " $value seiza.catalog
+s" E:\seiza-data" $value seiza.catalog
 s" " $value seiza.index
 s" 2.0" $value seiza.radius-deg
 s" 0.2" $value seiza.scale-tolerance

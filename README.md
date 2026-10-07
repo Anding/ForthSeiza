@@ -1,8 +1,7 @@
 # ForthSeiza
 
 Compile-time Seiza implementation of the shared Forth `solve-image`
-contract. It replaces ForthASTAP by being loaded before
-AstroImagingInForth, not through a runtime solver adapter.
+contract. It is the default AstroImagingInForth astrometric solver.
 
 ## Architecture
 
@@ -13,20 +12,16 @@ The DLL retries exactly once after a pipe or protocol failure.
 
 ## Compile-time selection
 
-Start a fresh VFXterm session, load ForthSeiza, configure it, then load the
-AstroImagingInForth integration script:
+The ordinary home session loads Seiza automatically:
 
 ```forth
-NEED ForthSeiza
-s" E:\Coding\seiza\target\release\seiza.exe" $-> seiza.executable
-s" E:\seiza-data" $-> seiza.catalog
-include scripts\AstroImagingInForth.f
+include scripts\HomeObservatory.f
 ```
 
-AstroImagingInForth keeps this `solve-image` implementation and therefore
-does not load ForthASTAP. To return to ASTAP, restart VFXterm and load
-`scripts\AstroImagingInForth.f` without first loading ForthSeiza. The
-selection is compile-time; do not load both packages in one session.
+To select ASTAP astrometry instead, restart VFXterm, load the complete
+`ForthASTAP` package first, and then load the home session. The focus-only
+`ForthASTAPFocus` package is compatible with Seiza because it does not define
+`solve-image`.
 
 The public Forth implementation is:
 
@@ -56,14 +51,16 @@ degrees and `0.2`.
 
 ## Configuration
 
-Set the executable and local catalogue paths before the first solve:
+The default installation paths are:
 
 ```forth
 s" E:\Coding\seiza\target\release\seiza.exe" $-> seiza.executable
 s" E:\seiza-data" $-> seiza.catalog
 ```
 
-`seiza.catalog` is required and is passed to Seiza as its `--data` directory.
+Override either value before the first solve when Seiza is installed
+elsewhere. `seiza.catalog` is required and is passed to Seiza as its `--data`
+directory.
 `seiza.index` is optional and left empty by default because hinted-only
 operation does not use blind solving.
 
