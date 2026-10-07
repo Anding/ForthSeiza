@@ -1,10 +1,7 @@
 \ Compile-time Seiza plate-solver implementation for the shared solve-image API.
 
 NEED ForthBase
-NEED FiniteFractions
-NEED Forth-map
-NEED AstroCalc
-NEED ForthAstroFormats
+NEED ForthAstroSolver
 
 LIBRARY: ForthSeizaBridge.dll
 Extern: int "C" SeizaBridgeStart(
@@ -32,15 +29,7 @@ s" 0.2" $value seiza.scale-tolerance
 s" " $value seiza.string0
 
 0 value seiza.started
-0 value seiza.solved.RA
-0 value seiza.solved.Dec
-0 value seiza.reported.RA
-0 value seiza.reported.Dec
-0 value seiza.reported.Sidereal
-0 value seiza.reported.NightOf
-s" " $value seiza.reported.Pierside$
 
-256 buffer: seiza.wcs-line
 FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 
 : seiza.start ( -- started? )
@@ -74,58 +63,6 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.string0
 ;
 
- : seiza.import-WCS { caddr u img | map fileid -- }
-\ Merge Seiza's CRLF-terminated WCS cards into the image context FITS map.
-    img FRAME_METADATA @ -> map
-    caddr u r/o open-file abort" Cannot open Seiza WCS file" -> fileid
-    begin
-        seiza.wcs-line 255 fileid read-line abort" Cannot read Seiza WCS file"
-    while
-        seiza.wcs-line swap FITS.read-line
-        dup 0= if
-            drop map =>
-        else
-            drop
-        then
-    repeat
-    drop
-    fileid close-file abort" Cannot close Seiza WCS file"
-;
-
-: seiza.~Dec$ ( deg-min-sec -- caddr u)
-    ':' ':' -1 ~custom$
-;
-
-: seiza.~RA$ ( hr-min-sec -- caddr u)
-    ':' ':' 0 ~custom$
-    s" HH:MM:SS.0" drop dup >R
-    swap move R> 10
-;
-
-: seiza.prepare-alpt { map -- }
-    s" OBJCTRA" map >string >number~ -> seiza.reported.RA
-    s" OBJCTDEC" map >string >number~ -> seiza.reported.Dec
-    s" SIDEREAL" map >string >number~ -> seiza.reported.Sidereal
-    s" NIGHTOF" map >string >number~ -> seiza.reported.NightOf
-    s" PIERSIDE" map >string $-> seiza.reported.Pierside$
-    s" CRVAL1" map >string >float drop 1.5E1 f/ fp~ -> seiza.solved.RA
-    s" CRVAL2" map >string >float drop fp~ -> seiza.solved.Dec
-;
-
-: seiza.formatALPT ( -- caddr u)
-    s\" s\" " $-> seiza.string0
-    seiza.reported.RA seiza.reported.Dec seiza.reported.NightOf JNOW swap
-    seiza.~RA$ $+> seiza.string0 s" ," $+> seiza.string0
-    seiza.~Dec$ $+> seiza.string0 s" ," $+> seiza.string0
-    seiza.reported.Pierside$ $+> seiza.string0 s" ," $+> seiza.string0
-    seiza.solved.RA seiza.solved.Dec seiza.reported.NightOf JNOW swap
-    seiza.~RA$ $+> seiza.string0 s" ," $+> seiza.string0
-    seiza.~Dec$ $+> seiza.string0 s" ," $+> seiza.string0
-    seiza.reported.Sidereal seiza.~RA$ $+> seiza.string0
-    s\" \" add-alignment-point" $+> seiza.string0
-    seiza.string0
-;
-
 : seiza.solve-image { img | filepath-buffer map status -- solved? }
     img FRAME_METADATA @ -> map
     img seiza.temp-FITSfilepath -> filepath-buffer
@@ -143,11 +80,10 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.scale-tolerance
     SeizaBridgeSolve -> status
     status 1 = if
-        filepath-buffer buffer-to-string seiza.wcs-filepath img seiza.import-WCS
+        filepath-buffer buffer-to-string seiza.wcs-filepath
+            img solver.import-WCS
         s" SEIZA" map =>" SOLVER"
         s" SOLVED" map =>" SOLVSTAT"
-        map seiza.prepare-alpt
-        seiza.formatALPT map =>" 10UALPT"
         0
     else
         s" FAILED" map =>" SOLVSTAT"
@@ -155,7 +91,4 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     then
 ;
 
-[UNDEFINED] solve-image [IF]
-DEFER solve-image ( img -- solved? )
-[THEN]
 ASSIGN seiza.solve-image TO-DO solve-image
