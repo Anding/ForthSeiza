@@ -4,7 +4,7 @@ NEED ForthBase
 NEED FiniteFractions
 NEED Forth-map
 NEED AstroCalc
-NEED ForthXISF
+NEED ForthAstroFormats
 
 LIBRARY: ForthSeizaBridge.dll
 Extern: int "C" SeizaBridgeStart(
@@ -61,7 +61,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.temp-FITSpath -> filepath-buffer
     filepath-buffer reset-buffer
     s" E:\images\working\" filepath-buffer write-buffer drop
-    s" UUID" img FITS_MAP @ >string filepath-buffer write-buffer drop
+    s" UUID" img FRAME_METADATA @ >string filepath-buffer write-buffer drop
     '\' filepath-buffer echo-buffer drop
     filepath-buffer buffer-punctuate-filepath
     s" solve.fits" filepath-buffer write-buffer drop
@@ -76,12 +76,12 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 
  : seiza.import-WCS { caddr u img | map fileid -- }
 \ Merge Seiza's CRLF-terminated WCS cards into the image context FITS map.
-    img FITS_MAP @ -> map
+    img FRAME_METADATA @ -> map
     caddr u r/o open-file abort" Cannot open Seiza WCS file" -> fileid
     begin
         seiza.wcs-line 255 fileid read-line abort" Cannot read Seiza WCS file"
     while
-        seiza.wcs-line swap XISF.read-FITSline
+        seiza.wcs-line swap FITS.read-line
         dup 0= if
             drop map =>
         else
@@ -127,7 +127,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 ;
 
 : seiza.solve-image { img | filepath-buffer map status -- solved? }
-    img FITS_MAP @ -> map
+    img FRAME_METADATA @ -> map
     img seiza.temp-FITSfilepath -> filepath-buffer
     img filepath-buffer save-FITSimage-to
     seiza.start 0= if
