@@ -2,6 +2,7 @@
 
 NEED ForthBase
 NEED ForthAstroSolver
+NEED ForthAstroPaths
 
 LIBRARY: ForthSeizaBridge.dll
 Extern: int "C" SeizaBridgeStart(
@@ -49,7 +50,8 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 : seiza.temp-FITSfilepath { img | filepath-buffer -- filepath-buffer }
     seiza.temp-FITSpath -> filepath-buffer
     filepath-buffer reset-buffer
-    s" E:\images\working\" filepath-buffer write-buffer drop
+    astro.working-root filepath-buffer write-buffer drop
+    '\' filepath-buffer echo-buffer drop
     s" UUID" img FRAME_METADATA @ >string filepath-buffer write-buffer drop
     '\' filepath-buffer echo-buffer drop
     filepath-buffer buffer-punctuate-filepath
