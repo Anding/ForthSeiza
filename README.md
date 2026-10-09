@@ -36,7 +36,7 @@ FITS map. A solve records `SOLVER=SEIZA`, `SOLVSTAT=SOLVED`, WCS keys, and
 `SOLVSTAT=FAILED`; the caller can still save science files.
 
 The solver FITS save temporarily assigns Seiza's private filename creator to
-`write-filepath`, then restores the previous action
+`write-filepath-fits`, then restores the previous action
 before returning or rethrowing a save error. Subsequent science XISF/FITS
 payloads therefore retain the configured science destination.
 
