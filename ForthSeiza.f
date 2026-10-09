@@ -64,10 +64,10 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 
 : seiza.save-temp-FITS { img | saved-path ior -- }
 \ Temporarily replace FITS pathname policy while writing the solver image.
-    ACTION-OF write-filepath -> saved-path
-    ASSIGN seiza.write-temp-FITSfilepath TO-DO write-filepath
-    img seiza.temp-FITSpath ['] save-FITSimage catch -> ior
-    saved-path TO-DO write-filepath
+    ACTION-OF write-filepath-fits -> saved-path
+    ASSIGN seiza.write-temp-FITSfilepath TO-DO write-filepath-fits
+    img seiza.temp-FITSpath ['] save-FITSframe-to catch -> ior
+    saved-path TO-DO write-filepath-fits
     ior ?dup if throw then
 ;
 

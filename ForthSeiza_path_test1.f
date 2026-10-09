@@ -15,8 +15,8 @@ NEED ForthSeiza
     suffix-addr suffix-u filepath-buffer write-buffer drop
 ;
 
-ASSIGN seiza.path-test-FITS TO-DO write-filepath
-ACTION-OF write-filepath constant seiza.path-test.saved-action
+ASSIGN seiza.path-test-FITS TO-DO write-filepath-fits
+ACTION-OF write-filepath-fits constant seiza.path-test.saved-action
 
 test.make-frame -> seiza.path-test.frame
 s" 11111111-2222-3333-4444-555555555555"
@@ -27,7 +27,7 @@ T{ seiza.path-test.frame seiza.save-temp-FITS }T ==
 T{ seiza.temp-FITSpath buffer-to-string hashS
 }T s" E:\images\working\11111111-2222-3333-4444-555555555555\solve.fits" hashS ==
 T{ seiza.temp-FITSpath buffer-to-string FileExists? }T -1 ==
-T{ ACTION-OF write-filepath seiza.path-test.saved-action = }T -1 ==
+T{ ACTION-OF write-filepath-fits seiza.path-test.saved-action = }T -1 ==
 Tend
 
 seiza.temp-FITSpath buffer-to-string delete-file drop
