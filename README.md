@@ -29,7 +29,7 @@ The public Forth implementation is:
 seiza.solve-image ( img -- solved? )
 ```
 
-It writes `<astro.working-root>\<UUID>\solve.fits`, performs a hinted solve, and
+It writes `<astro.root>\working\<UUID>\solve.fits`, performs a hinted solve, and
 imports the generated FITS-card `.wcs` sidecar into the image context's ordered
 FITS map. A solve records `SOLVER=SEIZA`, `SOLVSTAT=SOLVED`, WCS keys, and
 `10UALPT`. A missing mount hint, failed solve, or bridge failure records only

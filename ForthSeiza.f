@@ -47,15 +47,18 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.started if SeizaBridgeStop drop 0 -> seiza.started then
 ;
 
-: seiza.write-temp-FITSfilepath { img filepath-buffer -- }
-\ Build the extension-free pathname stem for Seiza's private solver image.
+: seiza.write-temp-FITSfilepath { img suffix-addr suffix-u filepath-buffer -- }
+\ Build the complete pathname for Seiza's private solver image.
     filepath-buffer reset-buffer
-    astro.working-root filepath-buffer write-buffer drop
+    astro.root filepath-buffer write-buffer drop
+    s" working" filepath-buffer append-path
     '\' filepath-buffer echo-buffer drop
     s" UUID" img FRAME_METADATA @ >string filepath-buffer write-buffer drop
     '\' filepath-buffer echo-buffer drop
     filepath-buffer buffer-punctuate-filepath
     s" solve" filepath-buffer write-buffer drop
+    suffix-addr suffix-u filepath-buffer write-buffer
+        abort" Seiza filepath buffer full"
 ;
 
 : seiza.save-temp-FITS { img | saved-path ior -- }

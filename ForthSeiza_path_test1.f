@@ -6,12 +6,13 @@ NEED ForthSeiza
 
 0 value seiza.path-test.frame
 
-: seiza.path-test-science { frame filepath-buffer -- }
+: seiza.path-test-science { frame suffix-addr suffix-u filepath-buffer -- }
 \ Distinct caller policy used to prove Seiza restores the previous action.
     frame drop
     filepath-buffer reset-buffer
     s" E:\Coding\ForthSeiza\caller-science"
         filepath-buffer write-buffer drop
+    suffix-addr suffix-u filepath-buffer write-buffer drop
 ;
 
 ASSIGN seiza.path-test-science TO-DO write-science-filepath
