@@ -47,16 +47,24 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.started if SeizaBridgeStop drop 0 -> seiza.started then
 ;
 
-: seiza.temp-FITSfilepath { img | filepath-buffer -- filepath-buffer }
-    seiza.temp-FITSpath -> filepath-buffer
+: seiza.write-temp-FITSfilepath { img filepath-buffer -- }
+\ Build the extension-free pathname stem for Seiza's private solver image.
     filepath-buffer reset-buffer
     astro.working-root filepath-buffer write-buffer drop
     '\' filepath-buffer echo-buffer drop
     s" UUID" img FRAME_METADATA @ >string filepath-buffer write-buffer drop
     '\' filepath-buffer echo-buffer drop
     filepath-buffer buffer-punctuate-filepath
-    s" solve.fits" filepath-buffer write-buffer drop
-    filepath-buffer
+    s" solve" filepath-buffer write-buffer drop
+;
+
+: seiza.save-temp-FITS { img | saved-path ior -- }
+\ Temporarily replace science pathname policy while writing the solver FITS.
+    ACTION-OF write-science-filepath -> saved-path
+    ASSIGN seiza.write-temp-FITSfilepath TO-DO write-science-filepath
+    img seiza.temp-FITSpath ['] save-FITSimage catch -> ior
+    saved-path TO-DO write-science-filepath
+    ior ?dup if throw then
 ;
 
 : seiza.wcs-filepath ( caddr u -- caddr u )
@@ -77,15 +85,14 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     then
 ;
 
-: seiza.solve-image { img | filepath-buffer map status -- solved? }
+: seiza.solve-image { img | map status -- solved? }
     img FRAME_METADATA @ -> map
-    img seiza.temp-FITSfilepath -> filepath-buffer
-    img filepath-buffer save-FITSimage-to
+    img seiza.save-temp-FITS
     seiza.start 0= if
         s" FAILED" map =>" SOLVSTAT"
         -1 exit
     then
-    filepath-buffer buffer-to-string
+    seiza.temp-FITSpath buffer-to-string
     s" RA" map seiza.optional-hint
     s" Dec" map seiza.optional-hint
     s" XPIXSZ" map >string
@@ -94,7 +101,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.scale-tolerance
     SeizaBridgeSolve -> status
     status 1 = if
-        filepath-buffer buffer-to-string seiza.wcs-filepath
+        seiza.temp-FITSpath buffer-to-string seiza.wcs-filepath
             img solver.import-WCS
         s" SEIZA" map =>" SOLVER"
         s" SOLVED" map =>" SOLVSTAT"
