@@ -47,8 +47,9 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.started if SeizaBridgeStop drop 0 -> seiza.started then
 ;
 
-: seiza.write-temp-FITSfilepath { img suffix-addr suffix-u filepath-buffer -- }
-\ Build the complete pathname for Seiza's private solver image.
+: seiza.write-temp-FITSfilepath
+    { img suffix-addr suffix-u filepath-buffer -- }
+\ Build the pathname stem for Seiza's private solver image.
     filepath-buffer reset-buffer
     astro.root filepath-buffer write-buffer drop
     s" working" filepath-buffer append-path
@@ -62,11 +63,11 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 ;
 
 : seiza.save-temp-FITS { img | saved-path ior -- }
-\ Temporarily replace science pathname policy while writing the solver FITS.
-    ACTION-OF write-science-filepath -> saved-path
-    ASSIGN seiza.write-temp-FITSfilepath TO-DO write-science-filepath
+\ Temporarily replace FITS pathname policy while writing the solver image.
+    ACTION-OF write-filepath -> saved-path
+    ASSIGN seiza.write-temp-FITSfilepath TO-DO write-filepath
     img seiza.temp-FITSpath ['] save-FITSimage catch -> ior
-    saved-path TO-DO write-science-filepath
+    saved-path TO-DO write-filepath
     ior ?dup if throw then
 ;
 

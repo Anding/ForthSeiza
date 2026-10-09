@@ -35,8 +35,8 @@ FITS map. A solve records `SOLVER=SEIZA`, `SOLVSTAT=SOLVED`, WCS keys, and
 `10UALPT`. A missing mount hint, failed solve, or bridge failure records only
 `SOLVSTAT=FAILED`; the caller can still save science files.
 
-The solver FITS save temporarily assigns Seiza's private builder to
-`write-science-filepath`, then restores the previous default or user action
+The solver FITS save temporarily assigns Seiza's private filename creator to
+`write-filepath`, then restores the previous action
 before returning or rethrowing a save error. Subsequent science XISF/FITS
 payloads therefore retain the configured science destination.
 
