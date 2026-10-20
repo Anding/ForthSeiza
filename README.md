@@ -44,6 +44,9 @@ payloads therefore retain the configured science destination.
 
 The image context remains the only source of the solve hint:
 
+Hints use ForthBase ordered string-map `map@` lookups. Missing or empty
+metadata supplies `( 0 0 )` to the bridge rather than aborting the lookup.
+
 | FITS key | Use |
 | --- | --- |
 | `RA`, `Dec` | J2000 mount position in degrees |

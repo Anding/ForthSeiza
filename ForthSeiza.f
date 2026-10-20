@@ -3,6 +3,7 @@
 NEED ForthBase
 NEED ForthAstroSolver
 NEED ForthAstroPaths
+NEED ordered-maps
 
 LIBRARY: ForthSeizaBridge.dll
 Extern: int "C" SeizaBridgeStart(
@@ -54,7 +55,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     astro.root filepath-buffer write-buffer drop
     s" working" filepath-buffer append-path
     '\' filepath-buffer echo-buffer drop
-    s" UUID" img FRAME_METADATA @ >string filepath-buffer write-buffer drop
+    s" UUID" img FRAME_METADATA @ map@ filepath-buffer write-buffer drop
     '\' filepath-buffer echo-buffer drop
     filepath-buffer buffer-punctuate-filepath
     s" solve" filepath-buffer write-buffer drop
@@ -77,18 +78,6 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     seiza.string0
 ;
 
-: seiza.optional-hint { key-addr key-u map -- value-addr value-u }
-\ Pointing hints are absent when imaging without a mount. Empty RA and Dec
-\ make the hinted solver fail cleanly rather than aborting metadata lookup.
-    key-addr key-u map item? if
-        drop
-        key-addr key-u map >string
-    else
-        drop
-        0 0
-    then
-;
-
 : seiza.solve-image { img | map status -- solved? }
     img FRAME_METADATA @ -> map
     img seiza.save-temp-FITS
@@ -97,10 +86,10 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
         -1 exit
     then
     seiza.temp-FITSpath buffer-to-string
-    s" RA" map seiza.optional-hint
-    s" Dec" map seiza.optional-hint
-    s" XPIXSZ" map >string
-    s" FOCALLEN" map >string
+    s" RA" map map@
+    s" Dec" map map@
+    s" XPIXSZ" map map@
+    s" FOCALLEN" map map@
     seiza.radius-deg
     seiza.scale-tolerance
     SeizaBridgeSolve -> status

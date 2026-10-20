@@ -23,6 +23,10 @@ s" 11111111-2222-3333-4444-555555555555"
     seiza.path-test.frame FRAME_METADATA @ =>" UUID"
 
 Tstart
+T{ s" RA" seiza.path-test.frame FRAME_METADATA @ map@ }T 0 0 ==
+T{ s" Dec" seiza.path-test.frame FRAME_METADATA @ map@ }T 0 0 ==
+s" 67.25" seiza.path-test.frame FRAME_METADATA @ =>" RA"
+T{ s" RA" seiza.path-test.frame FRAME_METADATA @ map@ s" 67.25" compare }T 0 ==
 T{ seiza.path-test.frame seiza.save-temp-FITS }T ==
 T{ seiza.temp-FITSpath buffer-to-string hashS
 }T s" E:\images\working\11111111-2222-3333-4444-555555555555\solve.fits" hashS ==
