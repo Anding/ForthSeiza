@@ -31,8 +31,10 @@ seiza.solve-image ( img -- solved? )
 
 It writes `<astro.root>\working\<UUID>\solve.fits`, performs a hinted solve, and
 imports the generated FITS-card `.wcs` sidecar into the image context's ordered
-FITS map. A solve records `SOLVER=SEIZA`, `SOLVSTAT=SOLVED`, WCS keys, and
-`10UALPT`. A missing mount hint, failed solve, or bridge failure records only
+FITS map. A solve records `SOLVER=SEIZA`, `SOLVSTAT=SOLVED`, WCS keys, and calls
+`solver.solved-metadata`. AstroImagingInForth binds this to generate `10UALPT`
+for every successful frame solve, not just model building.
+A missing mount hint, failed solve, or bridge failure records only
 `SOLVSTAT=FAILED`; the caller can still save science files.
 
 The solver FITS save temporarily assigns Seiza's private filename creator to

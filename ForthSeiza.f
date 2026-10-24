@@ -98,6 +98,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
             img solver.import-WCS
         s" SEIZA" map =>" SOLVER"
         s" SOLVED" map =>" SOLVSTAT"
+        map solver.solved-metadata
         0
     else
         s" FAILED" map =>" SOLVSTAT"
