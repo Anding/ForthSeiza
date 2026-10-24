@@ -49,27 +49,14 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 ;
 
 : seiza.write-temp-FITSfilepath
-    { img suffix-addr suffix-u filepath-buffer -- }
+    ( img suffix-addr suffix-u filepath-buffer -- )
 \ Build the pathname stem for Seiza's private solver image.
-    filepath-buffer reset-buffer
-    astro.root filepath-buffer write-buffer drop
-    s" working" filepath-buffer append-path
-    '\' filepath-buffer echo-buffer drop
-    s" UUID" img FRAME_METADATA @ map@ filepath-buffer write-buffer drop
-    '\' filepath-buffer echo-buffer drop
-    filepath-buffer buffer-punctuate-filepath
-    s" solve" filepath-buffer write-buffer drop
-    suffix-addr suffix-u filepath-buffer write-buffer
-        abort" Seiza filepath buffer full"
+    solver.temp-FITSfilepath abort" Seiza filepath buffer full"
 ;
 
-: seiza.save-temp-FITS { img | saved-path ior -- }
+: seiza.save-temp-FITS ( img -- )
 \ Temporarily replace FITS pathname policy while writing the solver image.
-    ACTION-OF write-filepath-fits -> saved-path
-    ASSIGN seiza.write-temp-FITSfilepath TO-DO write-filepath-fits
-    img seiza.temp-FITSpath ['] save-FITSframe-to catch -> ior
-    saved-path TO-DO write-filepath-fits
-    ior ?dup if throw then
+    seiza.temp-FITSpath ['] seiza.write-temp-FITSfilepath solver.save-temp-FITS
 ;
 
 : seiza.wcs-filepath ( caddr u -- caddr u )
@@ -96,9 +83,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     status 1 = if
         seiza.temp-FITSpath buffer-to-string seiza.wcs-filepath
             img solver.import-WCS
-        s" SEIZA" map =>" SOLVER"
-        s" SOLVED" map =>" SOLVSTAT"
-        map solver.solved-metadata
+        s" SEIZA" map solver.mark-solved
         0
     else
         s" FAILED" map =>" SOLVSTAT"
