@@ -37,10 +37,9 @@ for every successful frame solve, not just model building.
 A missing mount hint, failed solve, or bridge failure records only
 `SOLVSTAT=FAILED`; the caller can still save science files.
 
-The solver FITS save temporarily assigns Seiza's private filename creator to
-`write-filepath-fits`, then restores the previous action
-before returning or rethrowing a save error. Subsequent science XISF/FITS
-payloads therefore retain the configured science destination.
+The solver FITS save executes Seiza's private filename creator without changing
+`write-filepath-fits`. Ordinary save errors are reported, clear the temporary
+path, and skip solving. Later science destinations are unchanged.
 
 ## Hints
 

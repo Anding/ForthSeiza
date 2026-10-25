@@ -10,7 +10,7 @@ Tstart
 T{ seiza.catalog hashS }T s" E:\seiza-data" hashS ==
 T{ s" E:\images\tests\astap\known-good\LUM-E8-F5100-12365844e78a.wcs"
    seiza.test-image solver.import-WCS
-}T ==
+}T 0 ==
 T{ s" CRVAL1" seiza.test-image FRAME_METADATA @ map@ nip 0> }T -1 ==
 T{ s" CTYPE1" seiza.test-image FRAME_METADATA @ map@ drop 8 hashS }T s" RA---TAN" hashS ==
 T{ s" NOHINT" seiza.test-image FRAME_METADATA @ map@ }T 0 0 ==

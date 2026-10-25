@@ -28,13 +28,8 @@ ACTION-OF write-filepath-fits constant seiza.path-test.saved-action
 
 : seiza.path-test-failing-path ( frame suffix-addr suffix-u filepath-buffer -- )
 \ Fail before opening a file to exercise restoration of the caller's action.
-    -79 throw
-;
-
-: seiza.path-test-failure ( -- )
-\ Invoke the shared writer with a deliberately failing pathname action.
-    seiza.path-test.frame seiza.temp-FITSpath
-        ['] seiza.path-test-failing-path solver.save-temp-FITS
+    reset-buffer 2drop drop
+    cr ." Test pathname unavailable" cr
 ;
 
 test.make-frame -> seiza.path-test.frame
@@ -51,7 +46,9 @@ T{ seiza.temp-FITSpath buffer-to-string hashS
 }T s" E:\images\working\11111111-2222-3333-4444-555555555555\solve.fits" hashS ==
 T{ seiza.temp-FITSpath buffer-to-string FileExists? }T -1 ==
 T{ ACTION-OF write-filepath-fits seiza.path-test.saved-action = }T -1 ==
-T{ ' seiza.path-test-failure catch }T -79 ==
+T{ seiza.path-test.frame seiza.temp-FITSpath
+   ' seiza.path-test-failing-path solver.save-temp-FITS }T ==
+T{ seiza.temp-FITSpath buffer_used }T 0 ==
 T{ ACTION-OF write-filepath-fits seiza.path-test.saved-action = }T -1 ==
 T{ s" SEIZA" seiza.path-test.frame FRAME_METADATA @ solver.mark-solved }T ==
 T{ s" SOLVER" seiza.path-test.frame FRAME_METADATA @ map@ s" SEIZA" compare }T 0 ==
@@ -59,5 +56,5 @@ T{ s" SOLVSTAT" seiza.path-test.frame FRAME_METADATA @ map@ s" SOLVED" compare }
 T{ seiza.path-test.notifications }T 1 ==
 Tend
 
-seiza.temp-FITSpath buffer-to-string delete-file drop
+s" E:\images\working\11111111-2222-3333-4444-555555555555\solve.fits" delete-file drop
 seiza.path-test.frame free-frame

@@ -49,9 +49,11 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 ;
 
 : seiza.write-temp-FITSfilepath
-    ( img suffix-addr suffix-u filepath-buffer -- )
+    { img suffix-addr suffix-u filepath-buffer -- }
 \ Build the pathname stem for Seiza's private solver image.
-    solver.temp-FITSfilepath abort" Seiza filepath buffer full"
+    img suffix-addr suffix-u filepath-buffer solver.temp-FITSfilepath if
+        filepath-buffer reset-buffer cr ." Seiza filepath buffer full" cr
+    then
 ;
 
 : seiza.save-temp-FITS ( img -- )
@@ -68,6 +70,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
 : seiza.solve-image { img | map status -- solved? }
     img FRAME_METADATA @ -> map
     img seiza.save-temp-FITS
+    seiza.temp-FITSpath buffer_used 0= if img no-solver exit then
     seiza.start 0= if
         s" FAILED" map =>" SOLVSTAT"
         -1 exit
@@ -82,7 +85,7 @@ FILEPATH_SIZE allocate-buffer constant seiza.temp-FITSpath
     SeizaBridgeSolve -> status
     status 1 = if
         seiza.temp-FITSpath buffer-to-string seiza.wcs-filepath
-            img solver.import-WCS
+            img solver.import-WCS if img no-solver exit then
         s" SEIZA" map solver.mark-solved
         0
     else
