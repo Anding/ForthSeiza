@@ -1,8 +1,7 @@
 \ Compile-time Seiza plate-solver implementation for the shared solve-image API.
 
 NEED ForthBase
-NEED ForthAstroSolver
-NEED ForthAstroPaths
+NEED ForthAstroFormats
 NEED ordered-maps
 
 LIBRARY: ForthSeizaBridge.dll
