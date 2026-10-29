@@ -2,6 +2,8 @@
 
 #![allow(non_snake_case)]
 
+mod stack;
+
 use serde_json::{Value, json};
 use std::ffi::c_char;
 use std::fs::File;

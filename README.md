@@ -8,7 +8,8 @@ contract. It is the default AstroImagingInForth astrometric solver.
 `ForthSeizaBridge.dll` is a Rust DLL loaded by VFX Forth. It starts one live
 `seiza worker` child, keeps its catalogues initialized, and exchanges
 newline-delimited JSON-RPC with the child through standard input and output.
-The DLL retries exactly once after a pipe or protocol failure.
+The solver transport retries exactly once after a pipe or protocol failure.
+The independent stacking transport below never replays requests.
 
 ## Compile-time selection
 
@@ -75,3 +76,91 @@ operation does not use blind solving.
 
 Build the DLL for the same architecture as VFX Forth and place
 `ForthSeizaBridge.dll` beside `VFXterm.exe` before loading `ForthSeiza.f`.
+
+## Live stacking
+
+`NEED ForthSeizaStack` loads stacking without binding `solve-image` or starting
+equipment. The DLL manages a separate **64-bit** `seiza-stacker.exe` child.
+Pixels, calibration masters and accumulators stay in that child; only paths,
+opaque handles and small JSON results cross the 32-bit boundary.
+
+Build from sibling ForthSeiza and Seiza checkouts:
+
+```powershell
+cargo build --locked --release --target i686-pc-windows-msvc
+cargo build --manifest-path stacker\Cargo.toml --locked --release --target x86_64-pc-windows-msvc
+```
+
+Deploy the DLL beside the **actual** `VFXterm.exe` being launched, closing hosts
+that use that copy first. With the explicit worker target above, set:
+
+```forth
+s" E:\Coding\ForthSeiza\stacker\target\x86_64-pc-windows-msvc\release\seiza-stacker.exe" $-> seiza.stack.executable
+```
+
+Alternatively, on a 64-bit Rust host, build the worker without `--target` to
+use its default executable path. The default response timeout is 300 seconds;
+set `seiza.stack.timeout` before starting (1-3600 seconds).
+
+| Word | Stack effect | Meaning |
+| --- | --- | --- |
+| `seiza.stack.open` | `( caddr u -- handle\|0 )` | Integrate the completed reference once |
+| `seiza.stack.add` | `( handle caddr u -- status )` | 1 accepted, 0 rejected, -1 error |
+| `seiza.stack.state` | `( handle -- flag )` | Query counts and reference |
+| `seiza.stack.preview` | `( handle directory-addr directory-u -- flag )` | Publish an 8-bit stretched BMP and `latest.dat` |
+| `seiza.stack.save` | `( handle caddr u -- flag )` | Save linear F32 FITS/XISF; keep accumulating |
+| `seiza.stack.close` | `( handle -- flag )` | Release without implicit save |
+| `seiza.stack.stop` | `( -- )` | Stop only the stack child; invalidate handles |
+
+`.seiza.stack-result` prints the last successful response, including native
+admission diagnostics or a rejection reason. `.seiza.stack-error` prints the
+last error. Never Add the reference again: Open has already integrated it.
+
+Optional `seiza.stack.config` names a JSON file containing `bias`, `dark`,
+`flat`, `dark_exposure_seconds`, and/or `options`. Master paths are absolute;
+`options` is native Seiza `StackOptions` JSON, with native defaults and validation.
+It must not contain `reference` or `handle`. Leave the filename empty for defaults.
+For example:
+
+```json
+{
+  "dark": "E:\\masters\\dark.xisf",
+  "flat": "E:\\masters\\flat.fits",
+  "dark_exposure_seconds": 120,
+  "options": { "bin_factor": 2 }
+}
+```
+
+The worker also accepts newline-delimited JSON-RPC 2.0 directly, with matching
+IDs. Methods are `initialize` (`protocolVersion: 1`), `open`, `add`, `state`,
+`preview`, `save`, `close`, and `shutdown`. `open` accepts the configuration
+fields above plus `reference`; the other stack operations require `handle`.
+Add/Save take `path`; Preview takes `directory` and optional `max_dimension`
+(default 2048, maximum 8192). Stdout contains responses only.
+
+Previews use Seiza's native physical-domain normalization and Auto-MTF stretch.
+Each immutable UUID generation is complete before atomic replacement of
+`latest.dat`. Both image keys select the same stretched BMP; raw linear data
+is obtained with Save. No histogram/stack metadata stream is published yet.
+Old preview generations are retained for viewers in Hold and need operator cleanup.
+Science inputs and masters are protected against output overwrite.
+
+A lost pipe, response-ID mismatch or timeout stops the child and reports
+**unknown outcome**, without restart or replay. Previously integrated data
+cannot be recovered from RAM after that failure. Explicitly stop before starting
+again; old handle tokens cannot address new accumulators. Checkpoint/resume,
+shared-grid filter channels and colour composition are not implemented.
+
+### Offline checks
+
+```powershell
+cargo test
+cargo test --manifest-path stacker\Cargo.toml
+$env:SEIZA_STACKER_FIXTURES = 'E:\images\tests\live-stack\inputs'
+cargo test --manifest-path stacker\Cargo.toml export_offline_fixtures -- --ignored
+```
+
+With the bridge and worker deployed, `ForthSeizaStack_test.f` is a commented
+executable tutorial for a dedicated offline VFX session. It exercises real
+Open/Add/State/Preview/Save/Close, duplicate refusal and restart invalidation,
+then stops its worker. No camera, mount or solving catalogues are needed.
