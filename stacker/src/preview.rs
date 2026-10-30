@@ -1,5 +1,5 @@
 use crate::Result;
-use seiza_stacking::LiveStacker;
+use seiza_stacking::{ColorComposition, ColorTransfer, LiveStacker, StackView};
 use seiza_stretch::{
     ImageShape, SampleDomain, SampleNormalization, StretchConfig, StretchParams, StretchStack,
 };
@@ -23,10 +23,60 @@ fn default_dimension() -> usize {
 }
 
 pub fn publish(stack: &LiveStacker, request: &Request) -> Result<Value> {
+    let view = stack.view();
+    let name = format!(
+        "Live stack: {} accepted, {} rejected",
+        view.accepted_frames, view.rejected_frames
+    );
+    publish_view(view, request, ColorTransfer::LinearLight, &name)
+}
+
+pub fn publish_colour(
+    composition: &ColorComposition,
+    label: &str,
+    request: &crate::colour::Request,
+) -> Result<Value> {
+    if request.path.is_some() {
+        return Err("colour-preview takes directory, not path".into());
+    }
+    let image = &composition.image;
+    let view = StackView {
+        width: image.width,
+        height: image.height,
+        channels: image.channels,
+        mean: &image.data,
+        coverage: &[],
+        rejected_samples: &[],
+        accepted_frames: 0,
+        rejected_frames: 0,
+    };
+    let mut result = publish_view(
+        view,
+        &Request {
+            handle: 0,
+            directory: request
+                .directory
+                .clone()
+                .ok_or("colour-preview requires directory")?,
+            max_dimension: request.max_dimension,
+        },
+        composition.transfer,
+        &format!("Live colour: {label}"),
+    )?;
+    result["composition"] = json!(label);
+    result["transfer"] = json!(composition.transfer.fits_name());
+    Ok(result)
+}
+
+fn publish_view(
+    view: StackView<'_>,
+    request: &Request,
+    transfer: ColorTransfer,
+    name: &str,
+) -> Result<Value> {
     if !(1..=8192).contains(&request.max_dimension) {
         return Err("preview max_dimension must be between 1 and 8192".into());
     }
-    let view = stack.view();
     let scale = (request.max_dimension as f64 / view.width.max(view.height) as f64).min(1.0);
     let width = ((view.width as f64 * scale).round() as usize).max(1);
     let height = ((view.height as f64 * scale).round() as usize).max(1);
@@ -45,7 +95,9 @@ pub fn publish(stack: &LiveStacker, request: &Request) -> Result<Value> {
                 for sy in y0..y1 {
                     for sx in x0..x1 {
                         let index = (sy * view.width + sx) * channels + c;
-                        if view.coverage[index] > 0 && view.mean[index].is_finite() {
+                        if view.coverage.get(index).is_none_or(|count| *count > 0)
+                            && view.mean[index].is_finite()
+                        {
                             sum += view.mean[index] as f64;
                             count += 1;
                         }
@@ -57,22 +109,30 @@ pub fn publish(stack: &LiveStacker, request: &Request) -> Result<Value> {
             }
         }
     }
-    let domain = SampleDomain::PhysicalLinear {
-        normalization: SampleNormalization::default(),
-    }
-    .resolve(&samples, channels)
-    .map_err(|e| e.to_string())?;
-    domain
-        .apply_in_place(&mut samples, channels)
+    let pixels = if transfer == ColorTransfer::DisplayReferred {
+        samples
+            .iter()
+            .map(|sample| (sample.clamp(0.0, 1.0) * 255.0).round() as u8)
+            .collect()
+    } else {
+        let domain = SampleDomain::PhysicalLinear {
+            normalization: SampleNormalization::default(),
+        }
+        .resolve(&samples, channels)
         .map_err(|e| e.to_string())?;
-    let stretched =
-        StretchStack::single(StretchConfig::auto_mtf(StretchParams::default(), 200_000))
-            .apply_u8_image(&samples, ImageShape::new(width, height, channels))
+        domain
+            .apply_in_place(&mut samples, channels)
             .map_err(|e| e.to_string())?;
+        let stretched =
+            StretchStack::single(StretchConfig::auto_mtf(StretchParams::default(), 200_000))
+                .apply_u8_image(&samples, ImageShape::new(width, height, channels))
+                .map_err(|e| e.to_string())?;
+        stretched.data
+    };
     let mut rgb = Vec::with_capacity(width * height * 3);
     for (linear, pixel) in samples
         .chunks_exact(channels)
-        .zip(stretched.data.chunks_exact(channels))
+        .zip(pixels.chunks_exact(channels))
     {
         if !linear.iter().all(|sample| sample.is_finite()) {
             rgb.extend_from_slice(&[0, 0, 0]);
@@ -100,10 +160,6 @@ pub fn publish(stack: &LiveStacker, request: &Request) -> Result<Value> {
         file.sync_all().map_err(|e| e.to_string())?;
         drop(file);
         let relative = Path::new(&generation).join("stack.bmp");
-        let name = format!(
-            "Live stack: {} accepted, {} rejected",
-            view.accepted_frames, view.rejected_frames
-        );
         let manifest = format!(
             "image filepath: {}\nstretched image filepath: {}\nimage name: {}\ntime-stamp: {}\n",
             json!(relative),

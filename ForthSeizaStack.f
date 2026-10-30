@@ -7,6 +7,9 @@ LIBRARY: ForthSeizaBridge.dll
 Extern: int "C" SeizaStackStart( char * executable, int length, int timeout-seconds ) ;
 Extern: int "C" SeizaStackStop() ;
 Extern: int "C" SeizaStackOpen( char * reference, int reference-length, char * config, int config-length ) ;
+Extern: int "C" SeizaStackOpenChannel( int alignment-handle, char * reference, int reference-length, char * config, int config-length ) ;
+Extern: int "C" SeizaStackColourPreview( int * handles, int count, char * mode, int mode-length, char * config, int config-length, char * directory, int directory-length ) ;
+Extern: int "C" SeizaStackColourSave( int * handles, int count, char * mode, int mode-length, char * config, int config-length, char * path, int path-length ) ;
 Extern: int "C" SeizaStackAdd( int handle, char * path, int length ) ;
 Extern: int "C" SeizaStackPreview( int handle, char * directory, int length ) ;
 Extern: int "C" SeizaStackSave( int handle, char * path, int length ) ;
@@ -17,6 +20,7 @@ Extern: int "C" SeizaStackLastReply( char * output, int capacity ) ;
 
 s" E:\Coding\ForthSeiza\stacker\target\release\seiza-stacker.exe" $value seiza.stack.executable
 s" " $value seiza.stack.config
+s" " $value seiza.colour.config
 300 value seiza.stack.timeout
 0 value seiza.stack.started
 8192 allocate-buffer constant seiza.stack.text
@@ -57,6 +61,26 @@ s" " $value seiza.stack.config
     SeizaStackAdd dup 0< if .seiza.stack-error then
 ;
 
+: seiza.stack.open-channel ( alignment-handle caddr u -- handle|0 )
+\ Open an empty filter stack on an existing grid; explicitly add its first light.
+\ seiza.stack.config selects this channel's own calibration and native options.
+    seiza.stack.config SeizaStackOpenChannel
+    dup 0< if drop .seiza.stack-error 0 then
+;
+
+: seiza.stack.colour-preview { handles count mode-addr mode-u directory-addr directory-u -- flag }
+\ Publish native colour from handle cells; RGB=R/G/B, LRGB=L/R/G/B, palettes=Ha/OIII[/SII].
+\ seiza.colour.config optionally names a JSON file of native composition settings.
+    handles count mode-addr mode-u seiza.colour.config directory-addr directory-u
+    SeizaStackColourPreview 1 = dup 0= if .seiza.stack-error then
+;
+
+: seiza.stack.colour-save { handles count mode-addr mode-u path-addr path-u -- flag }
+\ Export floating-point FITS/XISF with native LINEAR/DISPLAY transfer metadata.
+\ Use the same handle order and optional settings file as colour-preview.
+    handles count mode-addr mode-u seiza.colour.config path-addr path-u
+    SeizaStackColourSave 1 = dup 0= if .seiza.stack-error then
+;
 : seiza.stack.preview ( handle directory-addr directory-u -- flag )
 \ Publish an atomic BMP generation and latest.dat in the given stream directory.
     SeizaStackPreview 1 = dup 0= if .seiza.stack-error then

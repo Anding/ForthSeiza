@@ -105,21 +105,28 @@ set `seiza.stack.timeout` before starting (1-3600 seconds).
 | Word | Stack effect | Meaning |
 | --- | --- | --- |
 | `seiza.stack.open` | `( caddr u -- handle\|0 )` | Integrate the completed reference once |
+| `seiza.stack.open-channel` | `( alignment-handle caddr u -- handle\|0 )` | Open an **empty** filter stack on an existing alignment grid |
 | `seiza.stack.add` | `( handle caddr u -- status )` | 1 accepted, 0 rejected, -1 error |
 | `seiza.stack.state` | `( handle -- flag )` | Query counts and reference |
 | `seiza.stack.preview` | `( handle directory-addr directory-u -- flag )` | Publish an 8-bit stretched BMP and `latest.dat` |
 | `seiza.stack.save` | `( handle caddr u -- flag )` | Save linear F32 FITS/XISF; keep accumulating |
 | `seiza.stack.close` | `( handle -- flag )` | Release without implicit save |
 | `seiza.stack.stop` | `( -- )` | Stop only the stack child; invalidate handles |
+| `seiza.stack.colour-preview` | `( handles count mode-addr mode-u directory-addr directory-u -- flag )` | Compose current channel means and atomically publish a BMP |
+| `seiza.stack.colour-save` | `( handles count mode-addr mode-u path-addr path-u -- flag )` | Save native F32 colour FITS/XISF with transfer metadata |
 
 `.seiza.stack-result` prints the last successful response, including native
 admission diagnostics or a rejection reason. `.seiza.stack-error` prints the
-last error. Never Add the reference again: Open has already integrated it.
+last error. Ordinary Open has already integrated its reference: never Add it
+again. **Open-channel starts empty:** explicitly Add its channel reference once.
+That reference controls the channel's own normalization/noise weighting; the
+alignment handle supplies only the common pixel grid and WCS.
 
 Optional `seiza.stack.config` names a JSON file containing `bias`, `dark`,
 `flat`, `dark_exposure_seconds`, and/or `options`. Master paths are absolute;
 `options` is native Seiza `StackOptions` JSON, with native defaults and validation.
-It must not contain `reference` or `handle`. Leave the filename empty for defaults.
+It must not contain `reference`, `handle` or `alignment_handle`.
+Leave the filename empty for defaults.
 For example:
 
 ```json
@@ -133,8 +140,9 @@ For example:
 
 The worker also accepts newline-delimited JSON-RPC 2.0 directly, with matching
 IDs. Methods are `initialize` (`protocolVersion: 1`), `open`, `add`, `state`,
-`preview`, `save`, `close`, and `shutdown`. `open` accepts the configuration
-fields above plus `reference`; the other stack operations require `handle`.
+`preview`, `save`, `colour-preview`, `colour-save`, `close`, and `shutdown`.
+`open` accepts the configuration fields above plus `reference` and optional
+`alignment_handle`; the single-stack operations require `handle`.
 Add/Save take `path`; Preview takes `directory` and optional `max_dimension`
 (default 2048, maximum 8192). Stdout contains responses only.
 
@@ -148,8 +156,50 @@ Science inputs and masters are protected against output overwrite.
 A lost pipe, response-ID mismatch or timeout stops the child and reports
 **unknown outcome**, without restart or replay. Previously integrated data
 cannot be recovered from RAM after that failure. Explicitly stop before starting
-again; old handle tokens cannot address new accumulators. Checkpoint/resume,
-shared-grid filter channels and colour composition are not implemented.
+again; old handle tokens cannot address new accumulators. **Checkpoint/resume
+remains TBD.**
+
+### Colour composition
+
+Pass an array of 32-bit handle cells, its count, a native mode and destination.
+All channels must be populated mono stacks on the same worker alignment grid.
+Independent stacks are not implicitly registered merely because their dimensions
+match. Channel exposure counts may differ; composition does not change them.
+
+| Mode | Handle order | Native operation |
+| --- | --- | --- |
+| `RGB` | red, green, blue | RGB or super RGB |
+| `LRGB` | luminance, red, green, blue | LRGB or super LRGB |
+| `SHO`, `SOH`, `HSO`, `HOS`, `OSH`, `OHS`, `FORAXX-SHO` | ha, oiii, sii | Native narrowband palette |
+| `HOO`, `FORAXX-HOO` | ha, oiii | Native narrowband palette |
+| `MATRIX` | ha, oiii; sii only if used by the matrix | Native narrowband matrix |
+
+`seiza.colour.config` optionally names a JSON file of native composition
+options (not stack calibration). Names follow Seiza's C-facing colour settings:
+`normalization` (`percentile`/`none`), `blackPercentile`, `whitePercentile`,
+`normalizationSamples`, `crop` (`none`/`bounds`/`inscribed`), `luminanceMode`
+(`native`/`super`), `luminanceWeight` (LRGB), `foraxxTargetMedian`,
+`foraxxShadowsClip`, and `matrix`. Defaults are native Seiza defaults.
+Matrix `red`, `green` and `blue` objects contain `ha`, `oiii`, `sii` weights;
+omitted weights are zero. Settings inappropriate to the selected family fail.
+
+For example, `{"luminanceMode":"super","crop":"inscribed"}` selects native
+super-luminance and common covered pixels for RGB/LRGB. This is not a custom
+mixing language. All stack inputs are linear; Foraxx produces `DISPLAY`
+samples, saved with their native metadata and previewed **without another
+normalization/stretch**. Ordinary compositions remain `LINEAR`.
+Uncovered samples remain NaN in saved data and appear black in previews.
+
+The direct worker colour request uses `mode`, an explicit `channels` role-to-handle
+object, optional `options`, and either `directory` (preview) or `path` (save).
+Preview also accepts `max_dimension`. For example:
+
+```json
+{"mode":"RGB","channels":{"red":1,"green":2,"blue":3},"options":{"crop":"bounds"},"path":"E:\\stacks\\rgb.xisf"}
+```
+
+Missing/stale/empty channels, wrong roles, incompatible grids and source/master
+overwrite are refused. Individual mono previews remain independently available.
 
 ### Offline checks
 
@@ -162,5 +212,6 @@ cargo test --manifest-path stacker\Cargo.toml export_offline_fixtures -- --ignor
 
 With the bridge and worker deployed, `ForthSeizaStack_test.f` is a commented
 executable tutorial for a dedicated offline VFX session. It exercises real
-Open/Add/State/Preview/Save/Close, duplicate refusal and restart invalidation,
-then stops its worker. No camera, mount or solving catalogues are needed.
+Open/Add/State/Preview/Save/Close, duplicate refusal, restart invalidation,
+shared-grid colour publication/export and stale colour handles, then stops its
+worker. No camera, mount or solving catalogues are needed.

@@ -168,11 +168,32 @@ impl Bridge {
             .transport
             .as_mut()
             .ok_or("stack worker has not been started")?;
-        if method != "open" {
+        if method.starts_with("colour-") {
+            let channels = params["channels"]
+                .as_object()
+                .ok_or("missing colour channels")?;
+            if channels.values().any(|value| {
+                value
+                    .as_u64()
+                    .and_then(|v| u32::try_from(v).ok())
+                    .is_none_or(|handle| !self.handles.contains(&handle))
+            }) {
+                return Err("invalid or stale colour channel handle".into());
+            }
+        } else if method != "open" {
             let handle = params["handle"].as_u64().unwrap_or(0) as u32;
             if !self.handles.contains(&handle) {
                 return Err("invalid or stale stack handle".into());
             }
+        }
+        if method == "open"
+            && let Some(handle) = params.get("alignment_handle")
+            && handle
+                .as_u64()
+                .and_then(|v| u32::try_from(v).ok())
+                .is_none_or(|handle| !self.handles.contains(&handle))
+        {
+            return Err("invalid or stale alignment handle".into());
         }
         let result = transport.request(method, params)?;
         self.reply = result.to_string();
@@ -228,6 +249,35 @@ pub unsafe extern "C" fn SeizaStackOpen(
     config: *const c_char,
     config_length: usize,
 ) -> i32 {
+    unsafe { open_request(None, reference, reference_length, config, config_length) }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn SeizaStackOpenChannel(
+    alignment_handle: u32,
+    reference: *const c_char,
+    reference_length: usize,
+    config: *const c_char,
+    config_length: usize,
+) -> i32 {
+    unsafe {
+        open_request(
+            Some(alignment_handle),
+            reference,
+            reference_length,
+            config,
+            config_length,
+        )
+    }
+}
+
+unsafe fn open_request(
+    alignment_handle: Option<u32>,
+    reference: *const c_char,
+    reference_length: usize,
+    config: *const c_char,
+    config_length: usize,
+) -> i32 {
     call(|bridge| {
         let reference =
             unsafe { super::input_string(reference, reference_length, "reference path")? };
@@ -246,8 +296,12 @@ pub unsafe extern "C" fn SeizaStackOpen(
         if !params.is_object()
             || params.get("reference").is_some()
             || params.get("handle").is_some()
+            || params.get("alignment_handle").is_some()
         {
-            return Err("stack config must be an object without reference or handle".into());
+            return Err(
+                "stack config must be an object without reference, handle or alignment_handle"
+                    .into(),
+            );
         }
         bridge.next_handle = bridge
             .next_handle
@@ -257,6 +311,9 @@ pub unsafe extern "C" fn SeizaStackOpen(
         let handle = bridge.next_handle;
         params["reference"] = json!(reference);
         params["handle"] = json!(handle);
+        if let Some(alignment_handle) = alignment_handle {
+            params["alignment_handle"] = json!(alignment_handle);
+        }
         let response = bridge.request("open", params)?;
         if response["handle"] != handle {
             return Err("unexpected stack handle".into());
@@ -264,6 +321,121 @@ pub unsafe extern "C" fn SeizaStackOpen(
         bridge.handles.insert(handle);
         Ok(handle as i32)
     })
+}
+
+fn colour_params(handles: &[u32], mode: &str, options: Value) -> Result<Value, String> {
+    let mode = mode.to_ascii_uppercase();
+    let roles: &[&str] = match mode.as_str() {
+        "RGB" => &["red", "green", "blue"],
+        "LRGB" => &["luminance", "red", "green", "blue"],
+        _ if handles.len() == 3 => &["ha", "oiii", "sii"],
+        _ => &["ha", "oiii"],
+    };
+    if roles.len() != handles.len() {
+        return Err("wrong number of handles for colour mode".into());
+    }
+    let channels: serde_json::Map<String, Value> = roles
+        .iter()
+        .zip(handles)
+        .map(|(role, handle)| ((*role).into(), json!(handle)))
+        .collect();
+    Ok(json!({"mode": mode, "channels": channels, "options": options}))
+}
+
+#[allow(clippy::too_many_arguments)]
+unsafe fn colour_request(
+    handles: *const u32,
+    count: usize,
+    mode: *const c_char,
+    mode_length: usize,
+    config: *const c_char,
+    config_length: usize,
+    path: *const c_char,
+    path_length: usize,
+    save: bool,
+) -> i32 {
+    call(|bridge| {
+        if handles.is_null() || !(2..=4).contains(&count) {
+            return Err("colour requires two to four channel handles".into());
+        }
+        let handles = unsafe { std::slice::from_raw_parts(handles, count) };
+        let mode = unsafe { super::input_string(mode, mode_length, "colour mode")? };
+        let config =
+            unsafe { super::optional_input_string(config, config_length, "colour config")? };
+        let options: Value = if let Some(config) = config {
+            let bytes = std::fs::read(config).map_err(|e| e.to_string())?;
+            if bytes.len() > 64 * 1024 {
+                return Err("colour config exceeds 64 KiB".into());
+            }
+            serde_json::from_slice(&bytes).map_err(|e| e.to_string())?
+        } else {
+            json!({})
+        };
+        let mut params = colour_params(handles, &mode, options)?;
+        params[if save { "path" } else { "directory" }] =
+            json!(unsafe { super::input_string(path, path_length, "colour output")? });
+        bridge.request(
+            if save {
+                "colour-save"
+            } else {
+                "colour-preview"
+            },
+            params,
+        )?;
+        Ok(1)
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn SeizaStackColourPreview(
+    handles: *const u32,
+    count: usize,
+    mode: *const c_char,
+    mode_length: usize,
+    config: *const c_char,
+    config_length: usize,
+    path: *const c_char,
+    path_length: usize,
+) -> i32 {
+    unsafe {
+        colour_request(
+            handles,
+            count,
+            mode,
+            mode_length,
+            config,
+            config_length,
+            path,
+            path_length,
+            false,
+        )
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn SeizaStackColourSave(
+    handles: *const u32,
+    count: usize,
+    mode: *const c_char,
+    mode_length: usize,
+    config: *const c_char,
+    config_length: usize,
+    path: *const c_char,
+    path_length: usize,
+) -> i32 {
+    unsafe {
+        colour_request(
+            handles,
+            count,
+            mode,
+            mode_length,
+            config,
+            config_length,
+            path,
+            path_length,
+            true,
+        )
+    }
 }
 
 unsafe fn path_request(
@@ -349,6 +521,37 @@ pub unsafe extern "C" fn SeizaStackLastReply(output: *mut c_char, capacity: usiz
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn colour_roles_and_stale_handles_are_checked_before_sending() {
+        let params = colour_params(&[1, 2, 3], "rgb", json!({})).unwrap();
+        assert_eq!(params["channels"], json!({"red":1,"green":2,"blue":3}));
+        assert_eq!(
+            colour_params(&[3, 2], "hoo", json!({})).unwrap()["channels"],
+            json!({"ha":3,"oiii":2})
+        );
+        assert!(colour_params(&[1, 2], "RGB", json!({})).is_err());
+        let transport = fake_worker("Start-Sleep -Seconds 10");
+        let mut bridge = Bridge {
+            transport: Some(transport),
+            handles: [1, 2].into_iter().collect(),
+            ..Bridge::default()
+        };
+        assert!(
+            bridge
+                .request("colour-preview", params)
+                .unwrap_err()
+                .contains("stale")
+        );
+        assert!(
+            bridge
+                .request("open", json!({"alignment_handle":3}))
+                .unwrap_err()
+                .contains("stale")
+        );
+        assert_eq!(bridge.transport.as_ref().unwrap().next_id, 1);
+        assert!(bridge.transport.as_ref().unwrap().alive);
+    }
 
     fn fake_worker(second_response: &str) -> Transport {
         let script = format!(

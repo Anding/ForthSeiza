@@ -1,3 +1,4 @@
+mod colour;
 mod preview;
 
 use seiza_stacking::{
@@ -19,6 +20,8 @@ struct Open {
     reference: PathBuf,
     #[serde(default)]
     handle: Option<u32>,
+    #[serde(default)]
+    alignment_handle: Option<u32>,
     #[serde(default)]
     bias: Option<PathBuf>,
     #[serde(default)]
@@ -47,6 +50,9 @@ struct FileRequest {
 struct Stack {
     native: LiveStacker,
     reference: PathBuf,
+    alignment: PathBuf,
+    grid: u32,
+    bin_factor: u32,
 }
 
 #[derive(Default)]
@@ -74,21 +80,46 @@ impl Worker {
                 let request: Open = decode(params)?;
                 astronomy_path(&request.reference)?;
                 let handle = request.handle.unwrap_or(self.next_handle + 1);
-                if handle == 0 || handle > i32::MAX as u32 || self.stacks.contains_key(&handle) {
+                if handle == 0 || handle > i32::MAX as u32 || handle <= self.next_handle {
                     return Err("invalid or already open handle".into());
                 }
-                let native = LiveStacker::open_fits(
-                    &request.reference,
-                    request.bias.as_deref(),
-                    request.dark.as_deref(),
-                    request.flat.as_deref(),
-                    request.dark_exposure_seconds,
-                    request.options,
-                )
+                let bin_factor = request.options.bin_factor;
+                let (alignment, grid) = if let Some(alignment_handle) = request.alignment_handle {
+                    let parent = self.stack(alignment_handle)?;
+                    if parent.bin_factor != bin_factor {
+                        return Err("channel bin_factor must match its alignment grid".into());
+                    }
+                    (parent.alignment.clone(), parent.grid)
+                } else {
+                    (request.reference.clone(), handle)
+                };
+                let native = if request.alignment_handle.is_some() {
+                    LiveStacker::open_fits_with_reference_image(
+                        &alignment,
+                        &request.reference,
+                        request.bias.as_deref(),
+                        request.dark.as_deref(),
+                        request.flat.as_deref(),
+                        request.dark_exposure_seconds,
+                        request.options,
+                    )
+                } else {
+                    LiveStacker::open_fits(
+                        &request.reference,
+                        request.bias.as_deref(),
+                        request.dark.as_deref(),
+                        request.flat.as_deref(),
+                        request.dark_exposure_seconds,
+                        request.options,
+                    )
+                }
                 .map_err(|e| e.to_string())?;
                 let stack = Stack {
                     native,
                     reference: request.reference,
+                    alignment,
+                    grid,
+                    bin_factor,
                 };
                 let response = state_json(handle, &stack);
                 self.stacks.insert(handle, stack);
@@ -139,6 +170,40 @@ impl Worker {
                 let stack = self.stack(request.handle)?;
                 preview::publish(&stack.native, &request)
             }
+            "colour-preview" | "colour-save" => {
+                let request: colour::Request = decode(params)?;
+                if method == "colour-save" && request.directory.is_some() {
+                    return Err("colour-save takes path, not directory".into());
+                }
+                let (composition, label, reference) = colour::compose(self, &request)?;
+                if method == "colour-preview" {
+                    preview::publish_colour(&composition, &label, &request)
+                } else {
+                    let path = request.path.as_deref().ok_or("colour-save requires path")?;
+                    astronomy_path(path)?;
+                    if self
+                        .stacks
+                        .values()
+                        .flat_map(|s| s.native.protected_paths())
+                        .any(|input| paths_refer_to_same_file(&input, path))
+                    {
+                        return Err(
+                            "colour output must not overwrite an input or calibration master"
+                                .into(),
+                        );
+                    }
+                    seiza_stacking::write_color_fits_f32(
+                        path,
+                        &composition,
+                        self.stack(reference)?.native.reference_headers(),
+                        &label,
+                    )
+                    .map_err(|e| e.to_string())?;
+                    Ok(json!({"path": path, "composition": label,
+                        "transfer": composition.transfer.fits_name(),
+                        "width": composition.image.width, "height": composition.image.height}))
+                }
+            }
             "save" => {
                 let request: FileRequest = decode(params)?;
                 astronomy_path(&request.path)?;
@@ -185,6 +250,7 @@ fn state_json(handle: u32, stack: &Stack) -> Value {
         "rejectedFrames": view.rejected_frames, "width": view.width,
         "height": view.height, "channels": view.channels, "reference": stack.reference,
         "referenceIntegrated": stack.native.reference_is_integrated(),
+        "alignmentReference": stack.alignment, "grid": stack.grid,
     })
 }
 
