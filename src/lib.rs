@@ -196,6 +196,8 @@ fn write_wcs_sidecar(image_path: &Path, result: &Value) -> Result<(), String> {
     let crval = pair(wcs, "crval")?;
     let crpix = pair(wcs, "crpix")?;
     let cd = matrix(wcs, "cd")?;
+    // Camera +Y east of north: anticlockwise on a north-up, east-left sky chart.
+    let position_angle = cd[0][1].atan2(cd[1][1]).to_degrees().rem_euclid(360.0);
     let output_path = image_path.with_extension("wcs");
     let file = File::create(&output_path)
         .map_err(|error| format!("cannot create {}: {error}", output_path.display()))?;
@@ -214,6 +216,7 @@ fn write_wcs_sidecar(image_path: &Path, result: &Value) -> Result<(), String> {
         ("CD1_2", fits_float(cd[0][1])),
         ("CD2_1", fits_float(cd[1][0])),
         ("CD2_2", fits_float(cd[1][1])),
+        ("POSANGLE", fits_float(position_angle)),
     ] {
         write_card(&mut writer, key, &value)?;
     }
@@ -550,6 +553,35 @@ mod tests {
         let bytes = std::fs::read(image.with_extension("wcs")).unwrap();
         assert!(bytes.starts_with(b"CTYPE1  = 'RA---TAN'"));
         assert_eq!(bytes.len() % 82, 0);
+        assert!(String::from_utf8(bytes).unwrap().contains("POSANGLE"));
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn wcs_position_angle_is_anticlockwise_from_north_up() {
+        let directory = std::env::temp_dir().join("forthseiza-position-angle-test");
+        std::fs::create_dir_all(&directory).unwrap();
+        let image = directory.join("solve.fits");
+        for angle in [0.0_f64, 45.0, 90.0, 180.0, 270.0, 359.0] {
+            let (sin, cos) = angle.to_radians().sin_cos();
+            let result = json!({
+                "wcs": {
+                    "projection": "TAN",
+                    "crval": [328.4308, 47.2731],
+                    "crpix": [3124.5, 2088.5],
+                    "cd": [[-cos * 0.00009, sin * 0.00009],
+                           [sin * 0.00009, cos * 0.00009]]
+                }
+            });
+            write_wcs_sidecar(&image, &result).unwrap();
+            let text = std::fs::read_to_string(image.with_extension("wcs")).unwrap();
+            let card = text
+                .lines()
+                .find(|line| line.starts_with("POSANGLE"))
+                .unwrap();
+            let measured: f64 = card.split_once('=').unwrap().1.trim().parse().unwrap();
+            assert!((measured - angle).abs() < 1e-8, "{angle}: {measured}");
+        }
         std::fs::remove_dir_all(directory).unwrap();
     }
 
